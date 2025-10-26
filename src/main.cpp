@@ -6,7 +6,7 @@
 #include <iostream>
 #include <print>
 
-auto main() -> int
+int main()
 {
     auto provider_or_error = pips::NytJsonProvider::create();
     if (!provider_or_error) {
@@ -30,7 +30,7 @@ auto main() -> int
         if (solution_opt) {
             pips::print_game_solution(game, *solution_opt, solver_time, difficulty);
         } else {
-            std::println("  Solver could not find a solution.");
+            std::println("Solver could not find a solution.");
         }
     }
 

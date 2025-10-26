@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <numeric>
-#include <ranges>
 
 namespace pips {
 
@@ -49,11 +48,13 @@ bool Solver::backtrack()
     if (!next_cell_opt) {
         return true;
     }
+
     const auto& cell = *next_cell_opt;
 
     for (std::size_t i = 0; i < m_game.dominoes.size(); ++i) {
-        if (m_used_dominoes[i])
+        if (m_used_dominoes[i]) {
             continue;
+        }
 
         const auto& domino = m_game.dominoes[i];
 
@@ -66,10 +67,10 @@ bool Solver::backtrack()
             m_grid[c2.row][c2.col] = p2;
             m_used_dominoes[i] = true;
 
-            const Zone* zone1 = m_zone_lookup[c1.row][c1.col];
-            const Zone* zone2 = m_zone_lookup[c2.row][c2.col];
+            auto* zone1 = m_zone_lookup[c1.row][c1.col];
+            auto* zone2 = m_zone_lookup[c2.row][c2.col];
 
-            bool is_valid = check_zone_constraints(*zone1);
+            auto is_valid = check_zone_constraints(*zone1);
             if (is_valid && zone1 != zone2) {
                 is_valid = check_zone_constraints(*zone2);
             }
@@ -77,8 +78,9 @@ bool Solver::backtrack()
             if (is_valid) {
                 // captures which pip went to which cell.
                 m_solution_placements.push_back({domino, {c1, p1}, {c2, p2}});
-                if (backtrack())
+                if (backtrack()) {
                     return true;
+                }
                 m_solution_placements.pop_back();  // Backtrack
             }
 
@@ -91,22 +93,26 @@ bool Solver::backtrack()
 
         const GridCell horiz_cell = {cell.row, static_cast<std::uint8_t>(cell.col + 1)};
 
-        if (try_placement(cell, horiz_cell, domino.p1, domino.p2))
+        if (try_placement(cell, horiz_cell, domino.p1, domino.p2)) {
             return true;
+        }
 
         if (domino.p1 != domino.p2) {
-            if (try_placement(cell, horiz_cell, domino.p2, domino.p1))
+            if (try_placement(cell, horiz_cell, domino.p2, domino.p1)) {
                 return true;
+            }
         }
 
         const GridCell vert_cell = {static_cast<std::uint8_t>(cell.row + 1), cell.col};
 
-        if (try_placement(cell, vert_cell, domino.p1, domino.p2))
+        if (try_placement(cell, vert_cell, domino.p1, domino.p2)) {
             return true;
+        }
 
         if (domino.p1 != domino.p2) {
-            if (try_placement(cell, vert_cell, domino.p2, domino.p1))
+            if (try_placement(cell, vert_cell, domino.p2, domino.p1)) {
                 return true;
+            }
         }
     }
 
@@ -116,10 +122,10 @@ bool Solver::backtrack()
 bool Solver::check_zone_constraints(const Zone& zone) const
 {
     std::vector<std::uint8_t> pips_in_zone;
-    bool                is_zone_full = true;
+    bool                      is_zone_full = true;
 
-    for (const auto& cell : zone.indices) {
-        const auto pip_val = m_grid[cell.row][cell.col];
+    for (const auto& [row, col] : zone.indices) {
+        const auto pip_val = m_grid[row][col];
         if (pip_val != UNOCCUPIED) {
             pips_in_zone.push_back(pip_val);
         } else {
@@ -127,39 +133,43 @@ bool Solver::check_zone_constraints(const Zone& zone) const
         }
     }
 
-    if (pips_in_zone.empty())
+    if (pips_in_zone.empty()) {
         return true;
+    }
 
     switch (zone.type) {
         case RegionType::SUM: {
             auto current_sum = std::accumulate(pips_in_zone.begin(), pips_in_zone.end(), 0);
-            if (current_sum > zone.target.value())
+            if (current_sum > zone.target.value()) {
                 return false;
-            if (is_zone_full && current_sum != zone.target.value())
+            }
+            if (is_zone_full && current_sum != zone.target.value()) {
                 return false;
+            }
             break;
         }
         case RegionType::GREATER:
-            if (is_zone_full && std::accumulate(pips_in_zone.begin(), pips_in_zone.end(), 0) <= zone.target.value())
+            if (is_zone_full && std::accumulate(pips_in_zone.begin(), pips_in_zone.end(), 0) <= zone.target.value()) {
                 return false;
+            }
             break;
         case RegionType::LESS:
-            if (is_zone_full && std::accumulate(pips_in_zone.begin(), pips_in_zone.end(), 0) >= zone.target.value())
+            if (is_zone_full && std::accumulate(pips_in_zone.begin(), pips_in_zone.end(), 0) >= zone.target.value()) {
                 return false;
+            }
             break;
         case RegionType::EQUALS:
-            for (auto pip : pips_in_zone | std::views::drop(1)) {
-                if (pip != pips_in_zone.front())
-                    return false;
+            if (std::ranges::adjacent_find(pips_in_zone, std::ranges::not_equal_to()) != pips_in_zone.end()) {
+                return false;
             }
+
             break;
         case RegionType::UNEQUAL:
             if (pips_in_zone.size() > 1) {
                 auto sorted_pips = pips_in_zone;
                 std::ranges::sort(sorted_pips);
-                for (std::size_t i = 0; i < sorted_pips.size() - 1; ++i) {
-                    if (sorted_pips[i] == sorted_pips[i + 1])
-                        return false;
+                if (std::ranges::adjacent_find(sorted_pips) != sorted_pips.end()) {
+                    return false;
                 }
             }
             break;
