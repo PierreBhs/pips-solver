@@ -69,10 +69,10 @@ std::vector<std::string_view> assign_region_colors(const pips::Game& game)
     }
 
     std::vector<std::string_view> region_colors(game.zones.size());
-    size_t                        color_idx = 0;
+    std::size_t                   color_idx = 0;
 
     // Assign a unique color to each region in order
-    for (size_t i = 0; i < game.zones.size(); ++i) {
+    for (std::size_t i = 0; i < game.zones.size(); ++i) {
         region_colors[i] = REGION_COLORS[color_idx % REGION_COLORS.size()];
         color_idx++;
     }
@@ -113,7 +113,7 @@ void pips::print_game_solution(const pips::Game&                         game,
         pips_grid[placement.placement2.cell.row][placement.placement2.cell.col] = placement.placement2.pip;
     }
 
-    for (size_t i = 0; i < game.zones.size(); ++i) {
+    for (std::size_t i = 0; i < game.zones.size(); ++i) {
         for (const auto& cell : game.zones[i].indices) {
             region_grid[cell.row][cell.col] = static_cast<int>(i);
         }
@@ -122,19 +122,19 @@ void pips::print_game_solution(const pips::Game&                         game,
     auto region_colors = assign_region_colors(game);
 
     std::print("{}{}{}", BORDER_COLOR, "\u250F", RESET_COLOR);
-    for (size_t c = 0; c < game.dim.cols; ++c)
+    for (std::size_t c = 0; c < game.dim.cols; ++c)
         std::print("{}{}{}", BORDER_COLOR, "\u2501\u2501\u2501", RESET_COLOR);
     std::println("{}{}{}", BORDER_COLOR, "\u2513", RESET_COLOR);
 
-    for (size_t r = 0; r < game.dim.rows; ++r) {
+    for (std::size_t r = 0; r < game.dim.rows; ++r) {
         std::print("{}{}{}", BORDER_COLOR, "\u2503", RESET_COLOR);
-        for (size_t c = 0; c < game.dim.cols; ++c) {
+        for (std::size_t c = 0; c < game.dim.cols; ++c) {
             const int pip = pips_grid[r][c];
             if (pip != -1) {
                 const int        region_idx = region_grid[r][c];
                 std::string_view color = RESET_COLOR;
                 if (region_idx != -1 && !region_colors.empty()) {
-                    color = region_colors[static_cast<size_t>(region_idx)];
+                    color = region_colors[static_cast<std::size_t>(region_idx)];
                 }
                 std::print("{}{}{:^3}{}", color, DICE_COLOR, pip, RESET_COLOR);
             } else {
@@ -145,12 +145,12 @@ void pips::print_game_solution(const pips::Game&                         game,
     }
 
     std::print("{}{}{}", BORDER_COLOR, "\u2517", RESET_COLOR);
-    for (size_t c = 0; c < game.dim.cols; ++c)
+    for (std::size_t c = 0; c < game.dim.cols; ++c)
         std::print("{}{}{}", BORDER_COLOR, "\u2501\u2501\u2501", RESET_COLOR);
     std::println("{}{}{}", BORDER_COLOR, "\u251B", RESET_COLOR);
 
     if (!region_colors.empty()) {
-        for (size_t i = 0; i < game.zones.size(); ++i) {
+        for (std::size_t i = 0; i < game.zones.size(); ++i) {
             std::string_view type_str = to_string(game.zones[i].type);
             std::string target_str = game.zones[i].target ? std::format(" (target: {})", *game.zones[i].target) : "";
             std::println("  {}{:^3}{} : {}{}", region_colors[i], " ", RESET_COLOR, type_str, target_str);

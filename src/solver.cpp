@@ -51,13 +51,13 @@ bool Solver::backtrack()
     }
     const auto& cell = *next_cell_opt;
 
-    for (size_t i = 0; i < m_game.dominoes.size(); ++i) {
+    for (std::size_t i = 0; i < m_game.dominoes.size(); ++i) {
         if (m_used_dominoes[i])
             continue;
 
         const auto& domino = m_game.dominoes[i];
 
-        auto try_placement = [&](const GridCell& c1, const GridCell& c2, uint8_t p1, uint8_t p2) -> bool {
+        auto try_placement = [&](const GridCell& c1, const GridCell& c2, std::uint8_t p1, std::uint8_t p2) -> bool {
             if (c2.row >= m_game.dim.rows || c2.col >= m_game.dim.cols || m_grid[c2.row][c2.col] != UNOCCUPIED) {
                 return false;
             }
@@ -89,7 +89,7 @@ bool Solver::backtrack()
             return false;
         };
 
-        const GridCell horiz_cell = {cell.row, static_cast<uint8_t>(cell.col + 1)};
+        const GridCell horiz_cell = {cell.row, static_cast<std::uint8_t>(cell.col + 1)};
 
         if (try_placement(cell, horiz_cell, domino.p1, domino.p2))
             return true;
@@ -99,7 +99,7 @@ bool Solver::backtrack()
                 return true;
         }
 
-        const GridCell vert_cell = {static_cast<uint8_t>(cell.row + 1), cell.col};
+        const GridCell vert_cell = {static_cast<std::uint8_t>(cell.row + 1), cell.col};
 
         if (try_placement(cell, vert_cell, domino.p1, domino.p2))
             return true;
@@ -115,7 +115,7 @@ bool Solver::backtrack()
 
 bool Solver::check_zone_constraints(const Zone& zone) const
 {
-    std::vector<int8_t> pips_in_zone;
+    std::vector<std::uint8_t> pips_in_zone;
     bool                is_zone_full = true;
 
     for (const auto& cell : zone.indices) {
@@ -157,7 +157,7 @@ bool Solver::check_zone_constraints(const Zone& zone) const
             if (pips_in_zone.size() > 1) {
                 auto sorted_pips = pips_in_zone;
                 std::ranges::sort(sorted_pips);
-                for (size_t i = 0; i < sorted_pips.size() - 1; ++i) {
+                for (std::size_t i = 0; i < sorted_pips.size() - 1; ++i) {
                     if (sorted_pips[i] == sorted_pips[i + 1])
                         return false;
                 }
