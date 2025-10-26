@@ -2,12 +2,15 @@
 
 #include <array>
 #include <format>
+#include <map>
 #include <print>
+#include <string>
 #include <string_view>
 #include <vector>
 
 namespace {
 
+// ANSI color codes for terminal display
 constexpr std::array<std::string_view, 32> REGION_COLORS = {
     "\033[48;2;255;105;180m", "\033[48;2;255;215;0m",   "\033[48;2;138;43;226m",  "\033[48;2;0;255;255m",
     "\033[48;2;255;0;255m",   "\033[48;2;50;205;50m",   "\033[48;2;255;165;0m",   "\033[48;2;255;69;0m",
@@ -23,6 +26,13 @@ constexpr std::string_view RESET_COLOR = "\033[0m";
 constexpr std::string_view HOLE_COLOR = "\033[48;2;40;40;40m";
 constexpr std::string_view DICE_COLOR = "\033[38;2;255;255;255m";
 constexpr std::string_view BORDER_COLOR = "\033[38;2;150;150;150m";
+
+struct DisplayCell
+{
+    std::string      content = " ";
+    std::string_view fg = RESET_COLOR;
+    std::string_view bg = RESET_COLOR;
+};
 
 std::string format_time(const std::chrono::duration<double>& duration)
 {
@@ -62,24 +72,6 @@ std::string_view to_string(pips::RegionType type)
     return "Unknown";
 }
 
-std::vector<std::string_view> assign_region_colors(const pips::Game& game)
-{
-    if (game.zones.empty()) {
-        return {};
-    }
-
-    std::vector<std::string_view> region_colors(game.zones.size());
-    std::size_t                   color_idx = 0;
-
-    // Assign a unique color to each region in order
-    for (std::size_t i = 0; i < game.zones.size(); ++i) {
-        region_colors[i] = REGION_COLORS[color_idx % REGION_COLORS.size()];
-        color_idx++;
-    }
-
-    return region_colors;
-}
-
 }  // namespace
 
 void pips::print_game_solution(const pips::Game&                         game,
@@ -102,58 +94,117 @@ void pips::print_game_solution(const pips::Game&                         game,
     std::println("\n╔═══════════════════════════════════════════╗");
     std::println("║   GAME: {:^31}   ║", difficulty_to_string(difficulty));
     std::println("╚═══════════════════════════════════════════╝");
-
     std::println("\nSolver Time: {}", format_time(solver_time));
 
+    // Pre-computation
     std::vector<std::vector<int>> pips_grid(game.dim.rows, std::vector<int>(game.dim.cols, -1));
-    std::vector<std::vector<int>> region_grid(game.dim.rows, std::vector<int>(game.dim.cols, -1));
+    std::map<GridCell, int>       domino_id_map;
 
-    for (const auto& placement : solution) {
-        pips_grid[placement.placement1.cell.row][placement.placement1.cell.col] = placement.placement1.pip;
-        pips_grid[placement.placement2.cell.row][placement.placement2.cell.col] = placement.placement2.pip;
+    for (int i = 0; const auto& p : solution) {
+        pips_grid[p.placement1.cell.row][p.placement1.cell.col] = p.placement1.pip;
+        pips_grid[p.placement2.cell.row][p.placement2.cell.col] = p.placement2.pip;
+        domino_id_map[p.placement1.cell] = i;
+        domino_id_map[p.placement2.cell] = i++;
     }
 
-    for (std::size_t i = 0; i < game.zones.size(); ++i) {
-        for (const auto& cell : game.zones[i].indices) {
-            region_grid[cell.row][cell.col] = static_cast<int>(i);
+    std::vector<std::string_view>        region_colors(game.zones.size());
+    std::map<GridCell, std::string_view> cell_colors;
+    for (std::size_t i = 0; const auto& zone : game.zones) {
+        region_colors[i] = REGION_COLORS[i % REGION_COLORS.size()];
+        for (const auto& cell : zone.indices) {
+            cell_colors[cell] = region_colors[i];
         }
+        i++;
     }
 
-    auto region_colors = assign_region_colors(game);
+    // Grid Canvas Construction
+    const std::size_t                     canvas_rows = game.dim.rows * 2 + 1;
+    const std::size_t                     canvas_cols = game.dim.cols * 4 + 1;
+    std::vector<std::vector<DisplayCell>> canvas(canvas_rows, std::vector<DisplayCell>(canvas_cols));
 
-    std::print("{}{}{}", BORDER_COLOR, "\u250F", RESET_COLOR);
-    for (std::size_t c = 0; c < game.dim.cols; ++c)
-        std::print("{}{}{}", BORDER_COLOR, "\u2501\u2501\u2501", RESET_COLOR);
-    std::println("{}{}{}", BORDER_COLOR, "\u2513", RESET_COLOR);
-
-    for (std::size_t r = 0; r < game.dim.rows; ++r) {
-        std::print("{}{}{}", BORDER_COLOR, "\u2503", RESET_COLOR);
-        for (std::size_t c = 0; c < game.dim.cols; ++c) {
+    for (std::uint8_t r = 0; r < game.dim.rows; ++r) {
+        for (std::uint8_t c = 0; c < game.dim.cols; ++c) {
             const int pip = pips_grid[r][c];
-            if (pip != -1) {
-                const int        region_idx = region_grid[r][c];
-                std::string_view color = RESET_COLOR;
-                if (region_idx != -1 && !region_colors.empty()) {
-                    color = region_colors[static_cast<std::size_t>(region_idx)];
-                }
-                std::print("{}{}{:^3}{}", color, DICE_COLOR, pip, RESET_COLOR);
-            } else {
-                std::print("{}{:^3}{}", HOLE_COLOR, " ", RESET_COLOR);
+
+            // Canvas coordinates for the center of the cell
+            const std::size_t canvas_r = r * 2 + 1;
+            const std::size_t canvas_c = c * 4 + 2;
+
+            if (pip == -1) {  //  hole
+                for (std::size_t i = 0; i < 3; ++i)
+                    canvas[canvas_r][canvas_c - 1 + i].bg = HOLE_COLOR;
+            } else {  // domino part
+                auto color = cell_colors.at({r, c});
+                canvas[canvas_r][canvas_c - 1].bg = color;
+                canvas[canvas_r][canvas_c].content = std::to_string(pip);
+                canvas[canvas_r][canvas_c].fg = DICE_COLOR;
+                canvas[canvas_r][canvas_c].bg = color;
+                canvas[canvas_r][canvas_c + 1].bg = color;
             }
         }
-        std::println("{}{}{}", BORDER_COLOR, "\u2503", RESET_COLOR);
     }
 
-    std::print("{}{}{}", BORDER_COLOR, "\u2517", RESET_COLOR);
-    for (std::size_t c = 0; c < game.dim.cols; ++c)
-        std::print("{}{}{}", BORDER_COLOR, "\u2501\u2501\u2501", RESET_COLOR);
-    std::println("{}{}{}", BORDER_COLOR, "\u251B", RESET_COLOR);
+    // Border and Separator Drawing
+    for (std::size_t r = 0; r < canvas_rows; ++r) {
+        for (std::size_t c = 0; c < canvas_cols; ++c) {
+            const bool is_row_sep = (r % 2 == 0);
+            const bool is_col_sep = (c % 4 == 0);
 
-    if (!region_colors.empty()) {
-        for (std::size_t i = 0; i < game.zones.size(); ++i) {
-            std::string_view type_str = to_string(game.zones[i].type);
-            std::string target_str = game.zones[i].target ? std::format(" (target: {})", *game.zones[i].target) : "";
-            std::println("  {}{:^3}{} : {}{}", region_colors[i], " ", RESET_COLOR, type_str, target_str);
+            if (!is_row_sep && !is_col_sep)
+                continue;
+
+            canvas[r][c].fg = BORDER_COLOR;
+
+            if (is_row_sep && is_col_sep) {  // Junctions
+                canvas[r][c].content = "┼";
+            } else if (is_row_sep) {
+                canvas[r][c].content = "─";
+            } else {
+                canvas[r][c].content = "│";
+            }
         }
+    }
+
+    // Erase internal domino borders
+    for (const auto& [cell, id] : domino_id_map) {
+        // Horizontal check
+        if (domino_id_map.count({cell.row, (std::uint8_t)(cell.col + 1)}) &&
+            domino_id_map.at({cell.row, (uint8_t)(cell.col + 1)}) == id) {
+            for (std::size_t i = 0; i < 3; ++i)
+                canvas[cell.row * 2 + i][cell.col * 4 + 4] = {};
+        }
+        // Vertical check
+        if (domino_id_map.count({(std::uint8_t)(cell.row + 1), cell.col}) &&
+            domino_id_map.at({(std::uint8_t)(cell.row + 1), cell.col}) == id) {
+            for (std::size_t i = 0; i < 5; ++i)
+                canvas[cell.row * 2 + 2][cell.col * 4 + i] = {};
+        }
+    }
+
+    // Render
+    for (std::size_t r = 0; r < canvas_rows; ++r) {
+        for (std::size_t c = 0; c < canvas_cols; ++c) {
+            const auto& cell = canvas[r][c];
+            if (cell.bg != RESET_COLOR)
+                std::print("{}", cell.bg);
+            if (cell.fg != RESET_COLOR)
+                std::print("{}", cell.fg);
+
+            std::print("{}", cell.content);
+            if (cell.fg != RESET_COLOR || cell.bg != RESET_COLOR)
+                std::print("{}", RESET_COLOR);
+        }
+        std::println("");
+    }
+
+    std::println("");
+
+    for (std::size_t i = 0; i < game.zones.size(); ++i) {
+        if (game.zones[i].type == RegionType::EMPTY)
+            continue;
+
+        std::string target_str = game.zones[i].target ? std::format(" (target: {})", *game.zones[i].target) : "";
+        std::println(
+            "  {}{:^3}{} : {}{}", region_colors[i], " ", RESET_COLOR, to_string(game.zones[i].type), target_str);
     }
 }
