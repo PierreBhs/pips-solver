@@ -1,12 +1,8 @@
 #include "pips_data.hpp"
 
-#include <nlohmann/json.hpp>
-
-#include <expected>
+#include <algorithm>
 #include <fstream>
 #include <string>
-#include <utility>
-#include <vector>
 
 namespace pips {
 
@@ -24,8 +20,7 @@ std::expected<NytJsonProvider, std::string> NytJsonProvider::create(std::string_
         return std::unexpected("Failed to parse JSON file: " + std::string(file_path));
     }
 
-    auto result = provider.load_games_from_json();
-    if (!result) {
+    if (auto result = provider.load_games_from_json(); !result) {
         return std::unexpected(result.error());
     }
 
@@ -45,10 +40,12 @@ std::expected<void, std::string> NytJsonProvider::load_games_from_json()
         if (!m_json_data.contains(difficulties[i])) {
             return std::unexpected("JSON data does not contain difficulty: " + std::string(difficulties[i]));
         }
+
         auto game_result = parse_game(m_json_data[difficulties[i]]);
         if (!game_result) {
             return std::unexpected(game_result.error());
         }
+
         m_games[i] = std::move(*game_result);
     }
 
@@ -73,88 +70,93 @@ std::expected<Game, std::string> NytJsonProvider::parse_game(const nlohmann::jso
     if (!solution_result)
         return std::unexpected(solution_result.error());
 
-    return Game{
-        .dominoes = std::move(*dominoes_result),
-        .zones = std::move(*zones_result),
-        .solution = std::move(*solution_result),
-        .dim = {0, 0}  // Placeholder for dimension
-    };
-}
-
-std::expected<Dominoes, std::string> NytJsonProvider::parse_dominoes(const nlohmann::json& dominoes_json)
-{
-    if (!dominoes_json.is_array()) {
-        return std::unexpected("Dominoes JSON is not an array.");
+    uint8_t max_row = 0, max_col = 0;
+    for (const auto& zone : *zones_result) {
+        for (const auto& cell : zone.indices) {
+            max_row = std::max(max_row, cell.row);
+            max_col = std::max(max_col, cell.col);
+        }
     }
 
-    Dominoes dominoes;
+    return Game{.dominoes = std::move(*dominoes_result),
+                .zones = std::move(*zones_result),
+                .dim = {.rows = static_cast<uint8_t>(max_row + 1), .cols = static_cast<uint8_t>(max_col + 1)},
+                .official_solution = std::move(*solution_result)};
+}
+
+std::expected<std::vector<Domino>, std::string> NytJsonProvider::parse_dominoes(const nlohmann::json& dominoes_json)
+{
+    if (!dominoes_json.is_array())
+        return std::unexpected("Dominoes JSON is not an array.");
+
+    std::vector<Domino> dominoes;
     dominoes.reserve(dominoes_json.size());
     for (const auto& domino_json : dominoes_json) {
-        if (!domino_json.is_array() || domino_json.size() != 2) {
+        if (!domino_json.is_array() || domino_json.size() != 2)
             return std::unexpected("Invalid domino format.");
-        }
-        dominoes.emplace_back(domino_json[0].get<std::uint8_t>(), domino_json[1].get<std::uint8_t>());
+        dominoes.emplace_back(domino_json[0].get<uint8_t>(), domino_json[1].get<uint8_t>());
     }
 
     return dominoes;
 }
 
-std::expected<Zones, std::string> NytJsonProvider::parse_zones(const nlohmann::json& regions_json)
+std::expected<std::vector<Zone>, std::string> NytJsonProvider::parse_zones(const nlohmann::json& regions_json)
 {
-    if (!regions_json.is_array()) {
+    if (!regions_json.is_array())
         return std::unexpected("Regions JSON is not an array.");
-    }
 
-    Zones zones;
+    std::vector<Zone> zones;
     zones.reserve(regions_json.size());
+
     for (const auto& region_json : regions_json) {
         if (!region_json.is_object())
             return std::unexpected("Region JSON is not an object.");
 
         auto type_str = region_json.value("type", "empty");
-        auto target = region_json.contains("target")
-                          ? std::optional<std::uint8_t>(region_json["target"].get<std::uint8_t>())
-                          : std::nullopt;
+
+        auto target =
+            region_json.contains("target") ? std::optional(region_json["target"].get<uint8_t>()) : std::nullopt;
 
         auto indices_json = region_json.value("indices", nlohmann::json());
         if (!indices_json.is_array())
             return std::unexpected("Indices JSON is not an array.");
 
-        std::vector<std::pair<std::uint8_t, std::uint8_t>> indices;
+        std::vector<GridCell> indices;
         indices.reserve(indices_json.size());
+
         for (const auto& index_json : indices_json) {
             if (!index_json.is_array() || index_json.size() != 2)
                 return std::unexpected("Invalid index format.");
-            indices.emplace_back(index_json[0].get<std::uint8_t>(), index_json[1].get<std::uint8_t>());
+            indices.emplace_back(index_json[0].get<uint8_t>(), index_json[1].get<uint8_t>());
         }
-
         zones.emplace_back(to_region_type(type_str), target, std::move(indices));
     }
 
     return zones;
 }
 
-std::expected<Solution, std::string> NytJsonProvider::parse_solution(const nlohmann::json& solution_json)
+std::expected<NytJsonProvider::OfficialSolution, std::string> NytJsonProvider::parse_solution(
+    const nlohmann::json& solution_json)
 {
-    if (!solution_json.is_array()) {
+    if (!solution_json.is_array())
         return std::unexpected("Solution JSON is not an array.");
-    }
 
-    Solution solution;
+    OfficialSolution solution;
     solution.reserve(solution_json.size());
+
     for (const auto& placement_json : solution_json) {
-        if (!placement_json.is_array() || placement_json.size() != 2) {
+        if (!placement_json.is_array() || placement_json.size() != 2)
             return std::unexpected("Invalid placement format.");
-        }
+
         const auto& cell1_json = placement_json[0];
         const auto& cell2_json = placement_json[1];
         if (!cell1_json.is_array() || cell1_json.size() != 2 || !cell2_json.is_array() || cell2_json.size() != 2) {
             return std::unexpected("Invalid cell format.");
         }
-        solution.emplace_back(std::make_pair(cell1_json[0].get<std::uint8_t>(), cell1_json[1].get<std::uint8_t>()),
-                              std::make_pair(cell2_json[0].get<std::uint8_t>(), cell2_json[1].get<std::uint8_t>()));
-    }
 
+        solution.emplace_back(GridCell{cell1_json[0].get<uint8_t>(), cell1_json[1].get<uint8_t>()},
+                              GridCell{cell2_json[0].get<uint8_t>(), cell2_json[1].get<uint8_t>()});
+    }
     return solution;
 }
 
