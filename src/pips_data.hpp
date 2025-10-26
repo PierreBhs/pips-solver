@@ -15,7 +15,7 @@ class NytJsonProvider
 public:
     enum class Difficulty { EASY, MEDIUM, HARD };
 
-    static std::expected<NytJsonProvider, std::string> create(std::string_view file_path);
+    static std::expected<NytJsonProvider, std::string> create();
 
     const Game& get_game(Difficulty difficulty) const;
 

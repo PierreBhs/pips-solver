@@ -17,7 +17,9 @@ struct GridCell
 {
     std::uint8_t row;
     std::uint8_t col;
-    auto         operator<=>(const GridCell&) const = default;
+
+    auto               operator<=>(const GridCell&) const = default;
+    [[nodiscard]] bool is_adjacent(const GridCell& other) const noexcept;
 };
 
 // Helps to print the solution (direction of domino)

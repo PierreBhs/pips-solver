@@ -1,23 +1,27 @@
 #include "pips_data.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
-namespace pips {
+namespace pips
+{
 
-std::expected<NytJsonProvider, std::string> NytJsonProvider::create(std::string_view file_path)
+std::expected<NytJsonProvider, std::string> NytJsonProvider::create()
 {
     NytJsonProvider provider;
 
-    std::ifstream file(file_path.data());
+    auto data_file_path = std::filesystem::current_path() / "data" / "pips.json";
+
+    std::ifstream file(data_file_path);
     if (!file.is_open()) {
-        return std::unexpected("Failed to open file: " + std::string(file_path));
+        return std::unexpected("Failed to open file: " + data_file_path.string());
     }
 
     provider.m_json_data = nlohmann::json::parse(file, nullptr, false);
     if (provider.m_json_data.is_discarded()) {
-        return std::unexpected("Failed to parse JSON file: " + std::string(file_path));
+        return std::unexpected("Failed to parse JSON file: " + data_file_path.string());
     }
 
     if (auto result = provider.load_games_from_json(); !result) {
