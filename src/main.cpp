@@ -8,12 +8,16 @@
 #include <string>
 #include <vector>
 
+// Display related
 void        print_game(const pips::Game& game, pips::NytJsonProvider::Difficulty difficulty);
 std::string format_domino_list(const std::vector<pips::Domino>& dominoes);
 std::string format_gridcell_list(const std::vector<pips::GridCell>& cells);
 std::string format_official_solution(const std::vector<std::pair<pips::GridCell, pips::GridCell>>& solution);
 std::string format_solver_solution(const std::vector<pips::DominoPlacement>& solution);
 std::string to_string(pips::RegionType type);
+
+bool verify_solution(const std::optional<std::vector<pips::DominoPlacement>>&      solver_solution,
+                     const std::vector<std::pair<pips::GridCell, pips::GridCell>>& official_solution);
 
 int main()
 {
@@ -29,19 +33,26 @@ int main()
     std::println("│       Pips Daily Game Data from NYT      │");
     std::println("└──────────────────────────────────────────┘");
 
-    const auto& easy_game = provider.get_game(pips::NytJsonProvider::Difficulty::EASY);
-    print_game(easy_game, pips::NytJsonProvider::Difficulty::EASY);
+    const auto& hard_game = provider.get_game(pips::NytJsonProvider::Difficulty::HARD);
+    print_game(hard_game, pips::NytJsonProvider::Difficulty::HARD);
 
-    // std::println("\n◆ Running solver...");
-    // pips::Solver solver(easy_game);
-    // auto solution_opt = solver.solve();
+    std::println("\n◆ Running solver...");
+    pips::Solver solver(hard_game);
+    auto         solution_opt = solver.solve();
 
-    // if (solution_opt) {
-    //     std::println("  Solver found a solution!");
-    //     std::println("  {}", format_solver_solution(*solution_opt));
-    // } else {
-    //     std::println("  Solver could not find a solution.");
-    // }
+    if (solution_opt) {
+        std::println("  Solver found a solution!");
+        std::println("  {}", format_solver_solution(*solution_opt));
+    } else {
+        std::println("  Solver could not find a solution.");
+    }
+
+    std::println("\n◆ Verifying against official solution...");
+    if (verify_solution(*solution_opt, hard_game .official_solution)) {
+        std::println("  ✅ Verification PASSED");
+    } else {
+        std::println("  ❌ Verification FAILED");
+    }
 
     return 0;
 }
@@ -143,16 +154,18 @@ std::string format_solver_solution(const std::vector<pips::DominoPlacement>& sol
 
     std::string result;
     for (const auto& p : solution) {
-        result += std::format("[D:({},{}) @ ({},{})-({},{})], ",
-                              p.domino.p1,
-                              p.domino.p2,
-                              p.cell1.row,
-                              p.cell1.col,
-                              p.cell2.row,
-                              p.cell2.col);
+        result += std::format("[D:({},{}) as ({} @ {},{})-({} @ {},{})], ",
+                              p.original_domino.p1,
+                              p.original_domino.p2,
+                              p.placement1.pip,
+                              p.placement1.cell.row,
+                              p.placement1.cell.col,
+                              p.placement2.pip,
+                              p.placement2.cell.row,
+                              p.placement2.cell.col);
     }
     result.pop_back();
-    result.pop_back();
+    result.pop_back();  // Remove trailing ", "
 
     return result;
 }
@@ -174,4 +187,50 @@ std::string to_string(pips::RegionType type)
             return "Unequal";
     }
     return "Unknown";
+}
+
+std::pair<pips::GridCell, pips::GridCell> normalize_placement(pips::GridCell c1, pips::GridCell c2)
+{
+    if (c1 < c2) {
+        return {c1, c2};
+    }
+    return {c2, c1};
+}
+
+bool verify_solution(const std::optional<std::vector<pips::DominoPlacement>>&      solver_solution_opt,
+                     const std::vector<std::pair<pips::GridCell, pips::GridCell>>& official_solution)
+{
+    if (!solver_solution_opt) {
+        std::println(std::cerr, "  Verification skipped: Solver did not produce a solution.");
+        return false;
+    }
+
+    const auto& solver_placements = *solver_solution_opt;
+    if (solver_placements.size() != official_solution.size()) {
+        std::println(std::cerr,
+                     "  Verification failed: Different number of placements (Solver: {}, Official: {}).",
+                     solver_placements.size(),
+                     official_solution.size());
+        return false;
+    }
+
+    std::vector<std::pair<pips::GridCell, pips::GridCell>> normalized_solver_solution;
+    normalized_solver_solution.reserve(solver_placements.size());
+    for (const auto& placement : solver_placements) {
+        // Access the cells from the PlacedPip structs
+        normalized_solver_solution.push_back(normalize_placement(placement.placement1.cell, placement.placement2.cell));
+    }
+
+    std::ranges::sort(normalized_solver_solution);
+
+    std::vector<std::pair<pips::GridCell, pips::GridCell>> normalized_official_solution;
+    normalized_official_solution.reserve(official_solution.size());
+
+    for (const auto& placement : official_solution) {
+        normalized_official_solution.push_back(normalize_placement(placement.first, placement.second));
+    }
+
+    std::ranges::sort(normalized_official_solution);
+
+    return normalized_solver_solution == normalized_official_solution;
 }

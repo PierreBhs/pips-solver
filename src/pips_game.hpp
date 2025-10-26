@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace pips {
@@ -16,15 +17,21 @@ struct GridCell
 {
     std::uint8_t row;
     std::uint8_t col;
+    auto         operator<=>(const GridCell&) const = default;
+};
 
-    auto operator<=>(const GridCell&) const = default;
+// Helps to print the solution (direction of domino)
+struct PlacedPip
+{
+    GridCell     cell;
+    std::uint8_t pip;
 };
 
 struct DominoPlacement
 {
-    Domino   domino;
-    GridCell cell1;
-    GridCell cell2;
+    Domino    original_domino;
+    PlacedPip placement1;
+    PlacedPip placement2;
 };
 
 enum class RegionType { EMPTY, EQUALS, SUM, LESS, GREATER, UNEQUAL };
