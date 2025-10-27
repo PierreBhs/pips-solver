@@ -25,3 +25,9 @@ cmake --build build
 
 # Run
 ./build/main
+```
+
+## 
+Medium solution for 27/10/2025:
+
+![output](https://github.com/PierreBhs/pips-solver/blob/main/data/output.png?raw=true)
