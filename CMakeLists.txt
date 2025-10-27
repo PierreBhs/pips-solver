@@ -10,18 +10,13 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wno-missing-field-initiali
 
 include(FetchContent)
 
-# CPR
-FetchContent_Declare(cpr GIT_REPOSITORY https://github.com/libcpr/cpr.git
-                         GIT_TAG 1.12.0) # Replace with your desired git commit from: https://github.com/libcpr/cpr/releases
-FetchContent_MakeAvailable(cpr)
-
 # JSON
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz)
 FetchContent_MakeAvailable(json)
 
 add_executable(main src/main.cpp src/pips_data.cpp src/pips_game.cpp src/solver.cpp src/display.cpp)
 
-target_link_libraries(main PRIVATE cpr::cpr nlohmann_json::nlohmann_json)
+target_link_libraries(main PRIVATE nlohmann_json::nlohmann_json)
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
