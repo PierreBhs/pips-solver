@@ -51,18 +51,38 @@ bool Solver::backtrack()
 
     const auto& cell = *next_cell_opt;
 
-    for (std::size_t i = 0; i < m_game.dominoes.size(); ++i) {
-        if (m_used_dominoes[i]) {
-            continue;
+    // generate all valid placements for a domino at the current cell
+    const auto enumerate_placements = [&](const Domino& domino) {
+        std::vector<std::tuple<GridCell, GridCell, uint8_t, uint8_t>> placements;
+
+        const auto try_add = [&](GridCell c2, uint8_t p1, uint8_t p2) {
+            if (c2.row < m_game.dim.rows && c2.col < m_game.dim.cols && m_grid[c2.row][c2.col] == UNOCCUPIED) {
+                placements.emplace_back(cell, c2, p1, p2);
+            }
+        };
+
+        // Horizontal
+        try_add({cell.row, static_cast<std::uint8_t>(cell.col + 1)}, domino.p1, domino.p2);
+        if (domino.p1 != domino.p2) {
+            try_add({cell.row, static_cast<std::uint8_t>(cell.col + 1)}, domino.p2, domino.p1);
         }
 
+        // Vertical
+        try_add({static_cast<std::uint8_t>(cell.row + 1), cell.col}, domino.p1, domino.p2);
+        if (domino.p1 != domino.p2) {
+            try_add({static_cast<std::uint8_t>(cell.row + 1), cell.col}, domino.p2, domino.p1);
+        }
+
+        return placements;
+    };
+
+    for (std::size_t i = 0; i < m_game.dominoes.size(); ++i) {
+        if (m_used_dominoes[i])
+            continue;
+
         const auto& domino = m_game.dominoes[i];
-
-        auto try_placement = [&](const GridCell& c1, const GridCell& c2, std::uint8_t p1, std::uint8_t p2) -> bool {
-            if (c2.row >= m_game.dim.rows || c2.col >= m_game.dim.cols || m_grid[c2.row][c2.col] != UNOCCUPIED) {
-                return false;
-            }
-
+        for (const auto& [c1, c2, p1, p2] : enumerate_placements(domino)) {
+            // Apply placement
             m_grid[c1.row][c1.col] = p1;
             m_grid[c2.row][c2.col] = p2;
             m_used_dominoes[i] = true;
@@ -70,49 +90,24 @@ bool Solver::backtrack()
             auto* zone1 = m_zone_lookup[c1.row][c1.col];
             auto* zone2 = m_zone_lookup[c2.row][c2.col];
 
-            auto is_valid = check_zone_constraints(*zone1);
-            if (is_valid && zone1 != zone2) {
-                is_valid = check_zone_constraints(*zone2);
+            // Validate zones
+            bool valid = check_zone_constraints(*zone1);
+            if (valid && zone1 != zone2) {
+                valid = check_zone_constraints(*zone2);
             }
 
-            if (is_valid) {
-                // captures which pip went to which cell.
+            if (valid) {
                 m_solution_placements.push_back({domino, {c1, p1}, {c2, p2}});
-                if (backtrack()) {
+                if (backtrack())
                     return true;
-                }
-                m_solution_placements.pop_back();  // Backtrack
+                // undo path
+                m_solution_placements.pop_back();
             }
 
+            // Undo
             m_grid[c1.row][c1.col] = UNOCCUPIED;
             m_grid[c2.row][c2.col] = UNOCCUPIED;
             m_used_dominoes[i] = false;
-
-            return false;
-        };
-
-        const GridCell horiz_cell = {cell.row, static_cast<std::uint8_t>(cell.col + 1)};
-
-        if (try_placement(cell, horiz_cell, domino.p1, domino.p2)) {
-            return true;
-        }
-
-        if (domino.p1 != domino.p2) {
-            if (try_placement(cell, horiz_cell, domino.p2, domino.p1)) {
-                return true;
-            }
-        }
-
-        const GridCell vert_cell = {static_cast<std::uint8_t>(cell.row + 1), cell.col};
-
-        if (try_placement(cell, vert_cell, domino.p1, domino.p2)) {
-            return true;
-        }
-
-        if (domino.p1 != domino.p2) {
-            if (try_placement(cell, vert_cell, domino.p2, domino.p1)) {
-                return true;
-            }
         }
     }
 

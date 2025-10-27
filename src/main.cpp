@@ -53,8 +53,8 @@ int main()
                             pips::NytJsonProvider::Difficulty::HARD}) {
         const auto& game = provider.get_game(difficulty);
 
-        const auto                          start_time = std::chrono::high_resolution_clock::now();
         pips::Solver                        solver(game);
+        const auto                          start_time = std::chrono::high_resolution_clock::now();
         auto                                solution_opt = solver.solve();
         const auto                          end_time = std::chrono::high_resolution_clock::now();
         const std::chrono::duration<double> solver_time = end_time - start_time;
