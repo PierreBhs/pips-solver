@@ -97,7 +97,7 @@ bool Solver::backtrack()
             }
 
             if (valid) {
-                m_solution_placements.push_back({domino, {c1, p1}, {c2, p2}});
+                m_solution_placements.emplace_back(domino, PlacedPip{c1, p1}, PlacedPip{c2, p2});
                 if (backtrack())
                     return true;
                 // undo path
