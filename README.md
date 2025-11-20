@@ -8,7 +8,7 @@ A C++ solver for [The New York Times Pips](https://www.nytimes.com/games/pips) p
 - Automatic download of today’s puzzle from NYT
 
 ## Requirements
-- C++23 compiler (GCC 13+, Clang 16+)
+- C++23 compiler (GCC 14+, Clang 17+)
 - CMake ≥ 3.15
 - `curl` command-line tool
 
